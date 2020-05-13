@@ -12,7 +12,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "three": "^0.116.1"
+    "three": "^0.116.1",
+    "zdog": "^1.1.2"
   },
   "devDependencies": {
     "parcel-bundler": "^1.12.4",
