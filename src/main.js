@@ -7,7 +7,7 @@ import Ui from './ui.js'
 
 Ui.init('.ui-overlay');
 Ui.MouseJoystick(e=>{
-    console.log(e);
+    //console.log(e);
 })
 
 var scene = new THREE.Scene();

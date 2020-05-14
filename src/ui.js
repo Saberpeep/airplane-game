@@ -1,88 +1,55 @@
-import Zdog from 'Zdog';
-
 var ui = {
     init: init,
     MouseJoystick: MouseJoystick,
 };
-var canvas;
-var els = {};
+var container;
 var now = 0;
-
-//accepts normalized 2d vector as percentages to anchor element to
-function anchor2d(el, vec2){
-    window.addEventListener('resize', ()=>{
-        if (!el) return;
-
-        el.translate = {
-            x: (canvas.width / 2) * vec2.x,
-            y: (canvas.height / 2) * vec2.y,
-        };
-
-    }, {passive: true})
-}
 
 function init(el){
     if (!el) throw new Error('ui requires a canvas or svg');
 
     if (typeof el == "string") el = document.querySelector(el);
-    canvas = el;
-
-    els.illo = new Zdog.Illustration({
-        element: canvas || '.zdog-canvas',
-        resize: true,
-    });
-    requestAnimationFrame(render);
-}
-function render(e){
-    now = e;
-    els.illo.updateRenderGraph();
-    requestAnimationFrame(render);
+    container = el;
 }
 function MouseJoystick(handler){
-    var outerBound = 300;
+    var outerBound = 150;
     var deadZone = 50;
-    els.mjs = {};
-    els.mjs.group = new Zdog.Group({
-        addTo: els.illo,
-    })
-    els.mjs.outer = new Zdog.Ellipse({
-        addTo: els.mjs.group,
-        diameter: outerBound * 2,
-        stroke: 10,
-        color: '#fff',
-    });
-    els.mjs.inner = new Zdog.Ellipse({
-        addTo: els.mjs.group,
-        diameter: deadZone * 2,
-        stroke: 5,
-        color: '#fff',
-        visible: false,
-    });
-    els.mjs.pointer = new Zdog.Ellipse({
-        addTo: els.mjs.group,
-        diameter: 20,
-        stroke: 10,
-        color: '#fff',
-        visible: false,
-    });
+
+    var wrapEl = document.createElement('div');
+    wrapEl.classList.add('virtual-joystick');
+    wrapEl.style.setProperty('--outerBound', `${outerBound * 2}px`);
+    wrapEl.style.setProperty('--deadzone', `${deadZone * 2}px`);
+
+    var outerRingEl = document.createElement('div');
+    outerRingEl.classList.add('outer');
+
+    var innerRingEl = document.createElement('div');
+    innerRingEl.classList.add('inner');
+
+    var pointerEl = document.createElement('div');
+    pointerEl.classList.add('pointer');
+
+    wrapEl.append(outerRingEl);
+    wrapEl.append(innerRingEl);
+    wrapEl.append(pointerEl);
+    container.append(wrapEl);
 
     const origin = {x: 0, y: 0};
     var target = {x: 0, y: 0},
         pointer = {x: 0, y: 0};
     
     //enable-disable pointer lock
-    canvas.addEventListener('click', e =>{
-        if(getDistance({x: canvas.width / 2, y: canvas.height / 2}, {x:e.offsetX, y:e.offsetY}) <= outerBound){
-            canvas.requestPointerLock();
+    wrapEl.addEventListener('click', e =>{
+        if(getDistance(getCenter(e.target), {x:e.offsetX, y:e.offsetY}) <= outerBound){
+            container.requestPointerLock();
             document.addEventListener('pointerlockerror', e=>{ throw e }, false);
             document.addEventListener('pointerlockchange', e=>{
-                if (document.pointerLockElement === canvas){
-                    els.mjs.pointer.visible = true;
-                    els.mjs.inner.visible = true;
+                if (document.pointerLockElement === container){
+                    wrapEl.classList.add('active');
                     document.addEventListener("mousemove", updatePosition, false);
+                    requestAnimationFrame(tween);
                 }else{
-                    els.mjs.pointer.visible = false;
-                    els.mjs.inner.visible = false;
+                    wrapEl.classList.remove('active');
                     document.removeEventListener("mousemove", updatePosition, false);
                     target = {x: 0, y: 0},
                     pointer = {x: 0, y: 0};
@@ -91,21 +58,69 @@ function MouseJoystick(handler){
         }
     });
 
+    var movementX = 0;
+    var movementY = 0;
+    var lastUpdate = 0;
+
     //capture and translate mouse input
     function updatePosition(e){
-        target.x += e.movementX
-        target.y += e.movementY;
+        movementX = e.movementX;
+        movementY = e.movementY;
+        lastUpdate = performance.now();
+    }
 
-        if (getDistance(origin, target) > outerBound){
-            var angle = getAngle(origin, target);
-            var point = getPointAtRadius(outerBound, angle);
-            target = point;
-            pointer = copy(point);
-        }else{
+    //smooth mouse input
+    var percentSmoothing = 10;
+    function tween(time){
+        //if not locked, stop loop;
+        if (document.pointerLockElement !== container) return;
+
+        //parse movement this frame
+        target.x += movementX;
+        target.y += movementY;
+
+        // if pointer has reached target, skip tweening
+        if (equalsRounded(target, pointer)){
             pointer = copy(target);
+        }else{
+            //limit to outerbound circle
+            if (getDistance(origin, target) > outerBound){
+                var angle = getAngle(origin, target);
+                var point = getPointAtRadius(outerBound, angle);
+                target = point;
+            }
+            //snap to deadzone center
+            // motion = Math.max(Math.abs(movementX), Math.abs(movementY));
+            if (movementX == 0 && movementY == 0 && getDistance(origin, target) < deadZone){
+                target = copy(origin);
+            }
+
+            //calc tweening
+            var incrementX = mapScale(outerBound - (outerBound / percentSmoothing), 0, outerBound * 2, 0, target.x - pointer.x);
+            var incrementY = mapScale(outerBound - (outerBound / percentSmoothing), 0, outerBound * 2, 0, target.y - pointer.y);
+            pointer.x += incrementX;
+            pointer.y += incrementY;
+            translateTo(pointerEl, pointer);
+    
+            //output
+            var normalized = {
+                x: mapScale(pointer.x, -outerBound, outerBound, -1, 1),
+                y: mapScale(pointer.y, -outerBound, outerBound, -1, 1),
+            }
+            //clear motion for this frame (lets motion checks know we have handled this frame)
+            // but only clear it if the mouse update is not busy
+            if (time - lastUpdate > 16){
+                movementX = 0;
+                movementY = 0;
+            }
+            
+
+            //output changes
+            handler(normalized);
         }
 
-        els.mjs.pointer.translate = copy(pointer);
+        
+        requestAnimationFrame(tween);
     }
     
 
@@ -135,8 +150,79 @@ function mapScale(num, in_min, in_max, out_min, out_max){
     return (num - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
+const twoSqrt2 = 2 * Math.sqrt(2);
+function mapCircleToSquare(p1){
+    //u = xCircle and v = yCircle;
+    // x = ½ √( 2 + u² - v² + 2u√2 ) - ½ √( 2 + u² - v² - 2u√2 )
+    // y = ½ √( 2 - u² + v² + 2v√2 ) - ½ √( 2 - u² + v² - 2v√2 )
+
+    let u = p1.x;
+    let v = p1.y;
+    let usq = u * u;
+    let vsq = v * v;
+    let fu = twoSqrt2 * u;
+    let fv = twoSqrt2 * v;
+    let x =
+        0.5 * Math.sqrt(2 + fu + usq - vsq) - 0.5 * Math.sqrt(2 - fu + usq - vsq);
+    let y =
+        0.5 * Math.sqrt(2 + fv - usq + vsq) - 0.5 * Math.sqrt(2 - fv - usq + vsq);
+    return {
+        x: x,
+        y: y,
+    };
+
+    // var u = p1.x;
+    // var v = p1.y;
+    // var u2 = u * u;
+    // var v2 = v * v;
+    // var twosqrt2 = 2.0 * Math.sqrt(2.0);
+    // var subtermx = 2.0 + u2 - v2;
+    // var subtermy = 2.0 - u2 + v2;
+    // var termx1 = subtermx + u * twosqrt2;
+    // var termx2 = subtermx - u * twosqrt2;
+    // var termy1 = subtermy + v * twosqrt2;
+    // var termy2 = subtermy - v * twosqrt2;
+    // return {
+    //     x: 0.5 * Math.sqrt(termx1) - 0.5 * Math.sqrt(termx2),
+    //     y: 0.5 * Math.sqrt(termy1) - 0.5 * Math.sqrt(termy2),
+    // }
+    
+
+    return {
+        x: 0.5 * Math.sqrt(2 + (p1.x * p1.x) - (p1.y * p1.y) + 2 * p1.x * Math.sqrt(2)) 
+         - 0.5 * Math.sqrt(2 + (p1.x * p1.x) - (p1.y * p1.y) - 2 * p1.x * Math.sqrt(2)),
+        y: 0.5 * Math.sqrt(2 - (p1.x * p1.x) + (p1.y * p1.y) + 2 * p1.y * Math.sqrt(2)) 
+         - 0.5 * Math.sqrt(2 - (p1.x * p1.x) + (p1.y * p1.y) - 2 * p1.y * Math.sqrt(2)),
+    }
+
+}
+
+function getSign(num){
+    return num / Math.abs(num);
+}
+
 function copy(obj){
     return JSON.parse(JSON.stringify(obj));
+}
+function equals(p1, p2){
+    return p1.x == p2.x && p1.y == p2.y;
+}
+function equalsRounded(p1, p2){
+    return Math.round(p1.x) == Math.round(p2.x) && Math.round(p1.y) == Math.round(p2.y);
+}
+
+function hide(el){
+    el.classList.add('hidden');
+}
+function show(el){
+    el.classList.remove('hidden');
+}
+function translateTo(el, p1){
+    el.style.setProperty('transform', `translate(${p1.x}px,${p1.y}px)`)
+}
+function getCenter(el){
+    var rect = el.getBoundingClientRect(el);
+    return {x: rect.width / 2, y: rect.height / 2};
 }
 
 export default ui;

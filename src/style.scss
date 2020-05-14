@@ -4,7 +4,30 @@ body {
 canvas { 
     display: block;
 }
-.ui-overlay{
+
+@mixin square {
+    
+    &:after {
+        content: "";
+        display: block;
+        padding-bottom: 100%;
+    }
+}
+@mixin centerX($width) {
+    position: absolute;
+    top: calc(50% - #{$width} / 2);
+}
+@mixin centerY($height) {
+    position: absolute;
+    left: calc(50% - #{$height} / 2);
+}
+@mixin center($size) {
+    position: absolute;
+    top: calc(50% - #{$size} / 2);
+    left: calc(50% - #{$size} / 2);
+}
+
+.ui-overlay {
     display: block;
     width: 100%;
     height: 100%;
@@ -14,4 +37,60 @@ canvas {
     left: 0;
     right: 0;
     bottom: 0;
+
+    &, * {
+        transition: opacity 1s;
+        opacity: 1;
+        .hidden {
+            opacity: 0;
+        }
+    }
+    
+
+    .virtual-joystick {
+        --outerBound: 600px;
+        --deadzone: 100px;
+        --pointer: 20px;
+        height: var(--outerBound);
+        width: var(--outerBound);
+        @include center(var(--outerBound));
+
+        .outer, .inner, .pointer {
+            border-radius: 100%;
+            border: 5px solid white;
+            box-sizing: border-box;
+            position: relative;
+        }
+        
+        .outer {
+            @include center(var(--outerBound));
+            width: var(--outerBound);
+            height: var(--outerBound);
+            border-width: 2px;
+        }
+        .inner {
+            @include center(var(--deadzone));
+            width: var(--deadzone);
+            height: var(--deadzone);
+            border-width: 1px;
+        }
+        .pointer {
+            position: relative;
+            @include center(var(--pointer));
+            width: var(--pointer);
+            height: var(--pointer);
+            border-width: 9px;
+        }
+
+        opacity: 0.2;
+        .pointer, .inner{
+            opacity: 0;
+        }
+        &.active {
+            opacity: 1;
+            .pointer, .inner{
+                opacity: 1;
+            }
+        }
+    }
 }
