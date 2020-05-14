@@ -190,24 +190,30 @@ var animate = function () {
     if(propeller){
         propeller.rotation.y += 0.3;
     }
+    let delta;
 
     if (controls.joystick){
         //visual flair
         gimbalTarget.setFromAxisAngle(z, Math.PI / 3 * -controls.joystick.x); //left-right
         gimbalTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 8 * Math.abs(controls.joystick.x))) //slight up-down for left-right
         gimbalTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 6 * -controls.joystick.y)) //up-down
-        gimbal.quaternion.rotateTowards(gimbalTarget, 0.1);
+        delta = gimbal.quaternion.angleTo(gimbalTarget);
+        gimbal.quaternion.rotateTowards(gimbalTarget, delta / 10);
 
         //rotation
-        movementTarget.setFromAxisAngle(y, Math.PI / 90 * -controls.joystick.x);
-        movementTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 90 * -controls.joystick.y)) //up-down
-        airplane.quaternion.multiply(movementTarget).normalize();
+        movementTarget.setFromAxisAngle(y, Math.PI / 8 * -controls.joystick.x); //turn left-right
+        movementTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 8 * -controls.joystick.y)) //pitch up-down
+        movementTarget.multiply(airplane.quaternion); //continous increment
+        delta = airplane.quaternion.angleTo(movementTarget);
+        airplane.quaternion.rotateTowards(movementTarget, delta / 10);
 
     }
     if (controls.buttons){
         if (controls.roll){
-            movementTarget.setFromAxisAngle(z, Math.PI / 180 * controls.roll); //up-down
-            airplane.quaternion.multiply(movementTarget).normalize();
+            movementTarget.setFromAxisAngle(z, Math.PI / 10 * controls.roll); //roll left-right
+            movementTarget.multiply(airplane.quaternion); //continous increment
+            delta = airplane.quaternion.angleTo(movementTarget);
+            airplane.quaternion.rotateTowards(movementTarget, delta / 10);
         }
     }
 
@@ -231,4 +237,23 @@ function loadAsPromise(loader, url){
     return new Promise((resolve, reject)=>{
         loader.load(url, resolve, null, reject);
     })
+}
+
+function rotateAroundObjectAxis(object, axis, radians) {
+    var rotationMatrix = new THREE.Matrix4();
+
+    rotationMatrix.makeRotationAxis(axis.normalize(), radians);
+    object.matrix.multiply(rotationMatrix);
+    object.rotation.setFromRotationMatrix( object.matrix );
+
+}
+
+function rotateAroundWorldAxis(object, axis, radians ) {
+
+  var rotationMatrix = new THREE.Matrix4();
+
+  rotationMatrix.makeRotationAxis( axis.normalize(), radians );
+  rotationMatrix.multiply( object.matrix );                       // pre-multiply
+  object.matrix = rotationMatrix;
+  object.rotation.setFromRotationMatrix( object.matrix );
 }
