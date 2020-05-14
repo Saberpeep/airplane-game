@@ -1,19 +1,23 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+// import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { Water } from 'three/examples/jsm/objects/Water';
 import { Sky } from 'three/examples/jsm/objects/Sky';
 import Ui from './ui.js'
 
+var controls = {};
 Ui.init('.ui-overlay');
 Ui.MouseJoystick(e=>{
-    //console.log(e);
+    controls.joystick = e;
+})
+Ui.Buttons(e=>{
+    controls.buttons = e.buttons;
+    controls.roll = e.roll;
 })
 
 var scene = new THREE.Scene();
 var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 4000 );
 var gltfloader = new GLTFLoader();
-var fileloader = new THREE.FileLoader();
 
 const color_water = 0x1c91ff;
 const color_sky = 0xd9eeff;
@@ -61,6 +65,10 @@ ground.position.y = - 33;
 ground.rotation.x = - Math.PI / 2;
 // ground.receiveShadow = true;
 scene.add( ground );
+
+var grid = new THREE.GridHelper(10000, 100, 0xffffff);
+grid.position.y = 1;
+scene.add(grid);
 
 // Water
 var waterGeometry = new THREE.PlaneBufferGeometry( 10000, 10000 );
@@ -129,13 +137,15 @@ function updateSun() {
 updateSun();
 
 
-// Orbit Camera
-var controls = new OrbitControls( camera, renderer.domElement );
-camera.position.set( 0, 60, 20 );
-controls.update();
+// // Orbit Camera
+// var controls = new OrbitControls( camera, renderer.domElement );
+// camera.position.set( 0, 60, 20 );
+// orbitcam.update();
 
 // Airplane
 var airplane = new THREE.Group();
+var gimbal = new THREE.Group();
+airplane.add(gimbal);
 airplane.position.set(0, 50, 0);
 
 gltfloader.load(
@@ -148,11 +158,14 @@ gltfloader.load(
             var c = gltf.scene.children[0];
             c.castShadow = true;
             c.receiveShadow = true;
-            airplane.add(c);
+            gimbal.add(c);
+            airplane.add(camera);
+            camera.position.set(0, 5, 20);
+            camera.lookAt(airplane.position);
         }
         scene.add(airplane);
-        controls.target = airplane.position;
-        controls.update();
+        // orbitcam.target = airplane.position;
+        // orbitcam.update();
 	},
 	// called while loading is progressing
 	function ( xhr ) {
@@ -164,23 +177,47 @@ gltfloader.load(
 	}
 );
 
+var z = new THREE.Vector3(0,0,1),
+    y = new THREE.Vector3(0,1,0),
+    x = new THREE.Vector3(1,0,0);
+var gimbalTarget = new THREE.Quaternion();
+var tempQuat = new THREE.Quaternion();
+var movementTarget = new THREE.Quaternion();
+var currentQuaternion = new THREE.Quaternion();
 var animate = function () {
-    requestAnimationFrame( animate );
 
     var propeller = airplane.getObjectByName("Propeller");
     if(propeller){
         propeller.rotation.y += 0.3;
     }
 
-    // Object3D.rotateOnAxis( axis, angle ); – Tim S. Apr 9 '14 at 7:18
-    // either that or: quaternion = new THREE.Quaternion().setFromAxisAngle( axisOfRotation, angleOfRotation ); 
-    //  object.rotation.setEulerFromQuaternion( quaternion ); – B M Apr 10 '14 at 9:20
+    if (controls.joystick){
+        //visual flair
+        gimbalTarget.setFromAxisAngle(z, Math.PI / 3 * -controls.joystick.x); //left-right
+        gimbalTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 8 * Math.abs(controls.joystick.x))) //slight up-down for left-right
+        gimbalTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 6 * -controls.joystick.y)) //up-down
+        gimbal.quaternion.rotateTowards(gimbalTarget, 0.1);
 
+        //rotation
+        movementTarget.setFromAxisAngle(y, Math.PI / 90 * -controls.joystick.x);
+        movementTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 90 * -controls.joystick.y)) //up-down
+        airplane.quaternion.multiply(movementTarget).normalize();
 
+    }
+    if (controls.buttons){
+        if (controls.roll){
+            movementTarget.setFromAxisAngle(z, Math.PI / 180 * controls.roll); //up-down
+            airplane.quaternion.multiply(movementTarget).normalize();
+        }
+    }
+
+    //movement
+    airplane.translateOnAxis(z, -1);
     
-    controls.update();
+    // orbitcam.update();
 
     renderer.render( scene, camera );
+    requestAnimationFrame( animate );
 };
 animate();
 

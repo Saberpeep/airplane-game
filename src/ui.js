@@ -1,15 +1,43 @@
 var ui = {
     init: init,
     MouseJoystick: MouseJoystick,
+    Buttons: Buttons,
 };
 var container;
-var now = 0;
 
 function init(el){
     if (!el) throw new Error('ui requires a canvas or svg');
 
     if (typeof el == "string") el = document.querySelector(el);
     container = el;
+}
+function Buttons(handler){
+
+    var activeKeys = {};
+    var roll = 0;
+
+    document.addEventListener('keydown', makeKeyHandler(true));
+    document.addEventListener('keyup', makeKeyHandler(false));
+
+    function makeKeyHandler(state){
+        return function keyHandler(e){
+            if (state){
+                activeKeys[e.key] = true;
+            }else{
+                delete activeKeys[e.key];
+            }
+
+            roll = 0;
+            if (activeKeys.q || activeKeys.e){
+                roll = (activeKeys.q)? 1 : -1;
+            }
+
+            handler({
+                buttons: activeKeys,
+                roll: roll,
+            });
+        }
+    }
 }
 function MouseJoystick(handler){
     var outerBound = 150;
@@ -53,6 +81,8 @@ function MouseJoystick(handler){
                     document.removeEventListener("mousemove", updatePosition, false);
                     target = {x: 0, y: 0},
                     pointer = {x: 0, y: 0};
+                    translateTo(pointerEl, pointer);
+                    handler(copy(origin));
                 }
             }, false);
         }
@@ -188,12 +218,12 @@ function mapCircleToSquare(p1){
     // }
     
 
-    return {
-        x: 0.5 * Math.sqrt(2 + (p1.x * p1.x) - (p1.y * p1.y) + 2 * p1.x * Math.sqrt(2)) 
-         - 0.5 * Math.sqrt(2 + (p1.x * p1.x) - (p1.y * p1.y) - 2 * p1.x * Math.sqrt(2)),
-        y: 0.5 * Math.sqrt(2 - (p1.x * p1.x) + (p1.y * p1.y) + 2 * p1.y * Math.sqrt(2)) 
-         - 0.5 * Math.sqrt(2 - (p1.x * p1.x) + (p1.y * p1.y) - 2 * p1.y * Math.sqrt(2)),
-    }
+    // return {
+    //     x: 0.5 * Math.sqrt(2 + (p1.x * p1.x) - (p1.y * p1.y) + 2 * p1.x * Math.sqrt(2)) 
+    //      - 0.5 * Math.sqrt(2 + (p1.x * p1.x) - (p1.y * p1.y) - 2 * p1.x * Math.sqrt(2)),
+    //     y: 0.5 * Math.sqrt(2 - (p1.x * p1.x) + (p1.y * p1.y) + 2 * p1.y * Math.sqrt(2)) 
+    //      - 0.5 * Math.sqrt(2 - (p1.x * p1.x) + (p1.y * p1.y) - 2 * p1.y * Math.sqrt(2)),
+    // }
 
 }
 
