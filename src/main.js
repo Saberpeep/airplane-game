@@ -5,7 +5,11 @@ import { Water } from 'three/examples/jsm/objects/Water';
 import { Sky } from 'three/examples/jsm/objects/Sky';
 import Ui from './ui.js'
 
-var controls = {};
+var controls = {
+    joystick: {x: 0, y:0, z:0},
+    roll: 0,
+    buttons: {},
+};
 Ui.init('.ui-overlay');
 Ui.MouseJoystick(e=>{
     controls.joystick = e;
@@ -192,30 +196,22 @@ var animate = function () {
     }
     let delta;
 
-    if (controls.joystick){
-        //visual flair
-        gimbalTarget.setFromAxisAngle(z, Math.PI / 3 * -controls.joystick.x); //left-right
-        gimbalTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 8 * Math.abs(controls.joystick.x))) //slight up-down for left-right
-        gimbalTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 6 * -controls.joystick.y)) //up-down
-        delta = gimbal.quaternion.angleTo(gimbalTarget);
-        gimbal.quaternion.rotateTowards(gimbalTarget, delta / 10);
+    //visual flair
+    gimbalTarget.setFromAxisAngle(z, Math.PI / 3 * -controls.joystick.x); //left-right
+    gimbalTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 8 * Math.abs(controls.joystick.x))); //slight up-down for left-right
+    gimbalTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 6 * -controls.joystick.y)); //up-down
+    delta = gimbal.quaternion.angleTo(gimbalTarget);
+    gimbal.quaternion.rotateTowards(gimbalTarget, delta / 10);
 
-        //rotation
-        movementTarget.setFromAxisAngle(y, Math.PI / 8 * -controls.joystick.x); //turn left-right
-        movementTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 8 * -controls.joystick.y)) //pitch up-down
-        movementTarget.multiply(airplane.quaternion); //continous increment
-        delta = airplane.quaternion.angleTo(movementTarget);
-        airplane.quaternion.rotateTowards(movementTarget, delta / 10);
-
-    }
-    if (controls.buttons){
-        if (controls.roll){
-            movementTarget.setFromAxisAngle(z, Math.PI / 10 * controls.roll); //roll left-right
-            movementTarget.multiply(airplane.quaternion); //continous increment
-            delta = airplane.quaternion.angleTo(movementTarget);
-            airplane.quaternion.rotateTowards(movementTarget, delta / 10);
-        }
-    }
+    //rotation (joystick)
+    movementTarget.copy(airplane.quaternion);
+    movementTarget.multiply(tempQuat.setFromAxisAngle(y, Math.PI / 8 * -controls.joystick.x)); //turn left-right
+    movementTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 8 * -controls.joystick.y)); //pitch up-down
+    //rotation (roll)
+    movementTarget.multiply(tempQuat.setFromAxisAngle(z, Math.PI / 25 * controls.roll));
+    //acceleration
+    delta = airplane.quaternion.angleTo(movementTarget);
+    airplane.quaternion.rotateTowards(movementTarget, delta / 10);
 
     //movement
     airplane.translateOnAxis(z, -1);
