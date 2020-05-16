@@ -8,13 +8,17 @@ import Ui from './ui.js'
 var controls = {
     joystick: {x: 0, y:0, z:0},
     roll: 0,
+    throttle: 0,
 };
 Ui.init('.ui-overlay');
 Ui.MouseJoystick(e=>{
     controls.joystick = e;
 })
-Ui.Slider('e', 'q', e=>{
+Ui.RollSlider(e=>{
     controls.roll = e;
+})
+Ui.ThrottleSlider(e=>{
+    controls.throttle = e;
 })
 
 var scene = new THREE.Scene();
@@ -187,11 +191,6 @@ var tempQuat = new THREE.Quaternion();
 var movementTarget = new THREE.Quaternion();
 var currentQuaternion = new THREE.Quaternion();
 var animate = function () {
-
-    var propeller = airplane.getObjectByName("Propeller");
-    if(propeller){
-        propeller.rotation.y += 0.3;
-    }
     let delta;
 
     //visual flair
@@ -212,7 +211,12 @@ var animate = function () {
     airplane.quaternion.rotateTowards(movementTarget, delta / 10);
 
     //movement
-    airplane.translateOnAxis(z, -1);
+    airplane.translateOnAxis(z, -controls.throttle);
+
+    var propeller = airplane.getObjectByName("Propeller");
+    if(propeller){
+        propeller.rotation.y += 0.3 * controls.throttle;
+    }
     
     // orbitcam.update();
 

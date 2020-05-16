@@ -1,27 +1,34 @@
+import RenderTasks from './renderTasks.js';
+import KeyListener from './keyListener.js';
+
 var ui = {
     init: init,
     MouseJoystick: MouseJoystick,
-    Slider: Slider,
+    RollSlider: RollSlider,
+    ThrottleSlider: ThrottleSlider,
 };
 var container;
-var activeKeys = {};
+var renderTasks = new RenderTasks();
+var keyListener = new KeyListener();
 
 function init(el){
     if (!el) throw new Error('ui requires a canvas or svg');
 
     if (typeof el == "string") el = document.querySelector(el);
     container = el;
-    startKeyListener(activeKeys);
+    keyListener.start();
+    renderTasks.start();
 }
-function Slider(keyup, keydown, handler){
-    var target = 0;
-    var current = 0;
+function RollSlider(handler){
     var outerBound = 300;
+    var keyup = 'e';
+    var keydown = 'q';
+    var id = 'slider-roll';
 
-    var wrapEl = document.querySelector('.slider-holder');
+    var wrapEl = document.querySelector(`.slider-holder.h`);
     if (!wrapEl){
         wrapEl = document.createElement('div');
-        wrapEl.classList.add('slider-holder');
+        wrapEl.classList.add('slider-holder','h');
         container.append(wrapEl);
     }
     var barEl = document.createElement('div');
@@ -34,80 +41,84 @@ function Slider(keyup, keydown, handler){
     barEl.append(pointerEl);
     wrapEl.append(barEl);
 
-    requestAnimationFrame(tween);
-
+    var target = 0;
+    var current = 0;
     var percentSmoothing = 10;
-    function tween(){
-        if(activeKeys[keyup]){
+
+    keyListener.add(id, [keyup, keydown], function(e){
+        if(e[keyup]){
             target = 1;
-        }else if(activeKeys[keydown]){
+        }else if(e[keydown]){
             target = -1;
         }else{
             target = 0;
         }
+    }, this);
 
+    function tween(){
         var increment = mapScale((outerBound / percentSmoothing), 0, outerBound * 2, 0, target - current);
         current += increment;
-        // current += Math.abs(current - target) / 10;
-        translateTo(pointerEl, {x: outerBound * current, y: 0})
+        if(Math.abs(current) <= 0.001) current = 0;
+
+        translateTo(pointerEl, {x: outerBound * current, y: 0});
 
         handler(current);
-
-        requestAnimationFrame(tween);
     }
+    renderTasks.add(id, tween, this);
 }
-function startKeyListener(output){
+function ThrottleSlider(handler){
+    var outerBound = 300;
+    var keyup = 'w';
+    var keydown = 's';
+    var keyboost = 'shift';
+    var id = 'slider-throttle';
 
-    var activeKeys = output;
+    var wrapEl = document.querySelector(`.slider-holder.v`);
+    if (!wrapEl){
+        wrapEl = document.createElement('div');
+        wrapEl.classList.add('slider-holder', 'v');
+        container.append(wrapEl);
+    }
+    var barEl = document.createElement('div');
+    barEl.classList.add('slider');
+    barEl.style.setProperty('--length', `${outerBound * 2}px`);
+    
+    var pointerEl = document.createElement('div');
+    pointerEl.classList.add('pointer');
 
-    document.addEventListener('keydown', makeKeyHandler(true));
-    document.addEventListener('keyup', makeKeyHandler(false));
+    barEl.append(pointerEl);
+    wrapEl.append(barEl);
 
-    function makeKeyHandler(state){
-        return function keyHandler(e){
-            if (state){
-                activeKeys[e.key] = true;
+    var baseSpeed = 1;
+    var target = baseSpeed;
+    var current = 0;
+    var percentSmoothing = 10;
+
+    keyListener.add(id, [keyup, keydown, keyboost], function(e){
+        if(e[keyup]){
+            if(e[keyboost]){
+                target = baseSpeed * 4;
             }else{
-                delete activeKeys[e.key];
+                target = baseSpeed * 2;
             }
-
-            // roll = 0;
-            // if (activeKeys.q || activeKeys.e){
-            //     roll = (activeKeys.q)? 1 : -1;
-            // }
+        }else if(e[keydown]){
+            target = baseSpeed / 2;
+        }else{
+            target = baseSpeed;
         }
+    }, this);
+
+    function tween(){
+        var increment = mapScale((outerBound / percentSmoothing), 0, outerBound * 2, 0, target - current);
+        current += increment;
+
+        var visualScale = mapScale(current, 0, baseSpeed * 4, outerBound, -outerBound);
+        translateTo(pointerEl, {x: 0, y: visualScale});
+
+        handler(current);
     }
+    renderTasks.add(id, tween, this);
 }
-// class RenderTasks {
-//     tasks = {};
-//     running = {};
-
-//     add(name, task, context){
-//         this.renderTasks[name] = task.bind(context);
-//     }
-//     remove(name){
-//         this.renderTasks[name] = null;
-//         delete this.renderTasks[name];
-//     }
-//     start(){
-//         this.running = true;
-//         requestAnimationFrame(this.#render);
-//     }
-//     stop(){
-//         this.running = false;
-//     }
-
-//     #render(time){
-//         if (!this.running) return;
-
-//         for (let task of Object.keys(this.renderTasks)){
-//             if(this.renderTasks.hasOwnProperty('task')){
-//                 this.renderTasks[task](time);
-//             }
-//         }
-//         requestAnimationFrame(render)
-//     }
-// }
 
 function MouseJoystick(handler){
     var outerBound = 150;
@@ -136,27 +147,29 @@ function MouseJoystick(handler){
     var target = {x: 0, y: 0},
         pointer = {x: 0, y: 0};
     
-    //enable-disable pointer lock
+    //request pointer lock if circle clicked
     wrapEl.addEventListener('click', e =>{
         if(getDistance(getCenter(e.target), {x:e.offsetX, y:e.offsetY}) <= outerBound){
             container.requestPointerLock();
-            document.addEventListener('pointerlockerror', e=>{ throw e }, false);
-            document.addEventListener('pointerlockchange', e=>{
-                if (document.pointerLockElement === container){
-                    wrapEl.classList.add('active');
-                    document.addEventListener("mousemove", updatePosition, false);
-                    requestAnimationFrame(tween);
-                }else{
-                    wrapEl.classList.remove('active');
-                    document.removeEventListener("mousemove", updatePosition, false);
-                    target = {x: 0, y: 0},
-                    pointer = {x: 0, y: 0};
-                    translateTo(pointerEl, pointer);
-                    handler(copy(origin));
-                }
-            }, false);
         }
     });
+    //start stop on pointer lock/unlock
+    document.addEventListener('pointerlockerror', e=>{ throw e }, false);
+    document.addEventListener('pointerlockchange', e=>{
+        if (document.pointerLockElement === container){
+            wrapEl.classList.add('active');
+            document.addEventListener("mousemove", updatePosition, false);
+            renderTasks.add('mjs', tween, this);
+        }else{
+            renderTasks.remove('mjs');
+            wrapEl.classList.remove('active');
+            document.removeEventListener("mousemove", updatePosition, false);
+            target = {x: 0, y: 0},
+            pointer = {x: 0, y: 0};
+            translateTo(pointerEl, pointer);
+            handler(copy(origin));
+        }
+    }, false);
 
     var movementX = 0;
     var movementY = 0;
@@ -217,10 +230,7 @@ function MouseJoystick(handler){
 
             //output changes
             handler(normalized);
-        }
-
-        
-        requestAnimationFrame(tween);
+        }        
     }
     
 
