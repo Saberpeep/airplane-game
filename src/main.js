@@ -212,6 +212,9 @@ var animate = function () {
 
     //movement
     airplane.translateOnAxis(z, -controls.throttle);
+    if(controls.throttle < 1){
+        airplane.position.y -= 0.5 * (1 - controls.throttle);
+    }
 
     var propeller = airplane.getObjectByName("Propeller");
     if(propeller){
