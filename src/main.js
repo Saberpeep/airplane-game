@@ -8,15 +8,13 @@ import Ui from './ui.js'
 var controls = {
     joystick: {x: 0, y:0, z:0},
     roll: 0,
-    buttons: {},
 };
 Ui.init('.ui-overlay');
 Ui.MouseJoystick(e=>{
     controls.joystick = e;
 })
-Ui.Buttons(e=>{
-    controls.buttons = e.buttons;
-    controls.roll = e.roll;
+Ui.Slider('e', 'q', e=>{
+    controls.roll = e;
 })
 
 var scene = new THREE.Scene();
@@ -208,8 +206,8 @@ var animate = function () {
     movementTarget.multiply(tempQuat.setFromAxisAngle(y, Math.PI / 8 * -controls.joystick.x)); //turn left-right
     movementTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 8 * -controls.joystick.y)); //pitch up-down
     //rotation (roll)
-    movementTarget.multiply(tempQuat.setFromAxisAngle(z, Math.PI / 25 * controls.roll));
-    //acceleration
+    movementTarget.multiply(tempQuat.setFromAxisAngle(z, Math.PI / 10 * -controls.roll));
+    //rotation acceleration
     delta = airplane.quaternion.angleTo(movementTarget);
     airplane.quaternion.rotateTowards(movementTarget, delta / 10);
 

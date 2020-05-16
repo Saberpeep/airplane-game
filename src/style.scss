@@ -93,4 +93,36 @@ canvas {
             }
         }
     }
+
+    .slider-holder{
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        align-items: center;
+
+        .slider{
+            --length: 600px;
+            height: 0;
+            width: var(--length);
+            border: 2px solid white;
+            border-radius: 2px;
+            margin: 40px;
+            overflow: visible;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            .pointer{
+                position: relative;
+                width: 5px;
+                height: 5px;
+                border: 8px solid white;
+                background-color: white;
+                border-radius: 100%;
+            }
+        }
+    }
 }
