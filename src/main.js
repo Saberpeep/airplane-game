@@ -38,17 +38,23 @@ document.body.appendChild( renderer.domElement );
 scene.background = new THREE.Color(color_sky);
 // scene.fog = new THREE.Fog( color_horizon, 1, 1000 );
 
+// Ambient Light
 var hemiLight = new THREE.HemisphereLight( color_sky, color_water, 1 );
 scene.add( hemiLight );
 var hemiLightHelper = new THREE.HemisphereLightHelper( hemiLight, 10 );
 scene.add( hemiLightHelper );
-                
+
+// Sunlight
 var skyLight = new THREE.DirectionalLight( color_sun, 1 );
-skyLight.position.set( - 1, 1.75, 1 );
-skyLight.position.multiplyScalar( 30 );
-scene.add( skyLight );
+// skyLight.position.set( -1, 1, 1 );
+// skyLight.position.multiplyScalar( 300 );
+var dirLightHelper = new THREE.DirectionalLightHelper( skyLight, 10 );
+scene.add( dirLightHelper );
 
 // Sun Shadows
+var shadowHelper = new THREE.CameraHelper( skyLight.shadow.camera );
+scene.add( shadowHelper );
+scene.add( skyLight );
 renderer.shadowMapEnabled = true;
 skyLight.castShadow = true;
 skyLight.shadow.mapSize.width = 2048;
@@ -61,9 +67,31 @@ skyLight.shadow.camera.bottom = - d;
 skyLight.shadow.camera.far = 3500;
 skyLight.shadow.bias = - 0.0001;
 
-var dirLightHelper = new THREE.DirectionalLightHelper( skyLight, 10 );
-scene.add( dirLightHelper );
 
+// Skybox
+var sky = new Sky();
+
+var uniforms = sky.material.uniforms;
+
+uniforms[ 'turbidity' ].value = 10;
+uniforms[ 'rayleigh' ].value = 2;
+uniforms[ 'luminance' ].value = 1;
+uniforms[ 'mieCoefficient' ].value = 0.005;
+uniforms[ 'mieDirectionalG' ].value = 0.8;
+
+var parameters = {
+    distance: 400,
+    inclination: 0.2,
+    azimuth: 0.205
+};
+
+var cubeCamera = new THREE.CubeCamera( 0.1, 1, 512 );
+cubeCamera.renderTarget.texture.generateMipmaps = true;
+cubeCamera.renderTarget.texture.minFilter = THREE.LinearMipmapLinearFilter;
+scene.background = cubeCamera.renderTarget;
+
+
+// Ground
 var groundGeo = new THREE.PlaneBufferGeometry( 10000, 10000 );
 var groundMat = new THREE.MeshPhongMaterial( { color: color_water } );
 var ground = new THREE.Mesh( groundGeo, groundMat );
@@ -101,30 +129,6 @@ water.receiveShadow = true;
 
 scene.add( water );
 
-
-// Skybox
-
-var sky = new Sky();
-
-var uniforms = sky.material.uniforms;
-
-uniforms[ 'turbidity' ].value = 10;
-uniforms[ 'rayleigh' ].value = 2;
-uniforms[ 'luminance' ].value = 1;
-uniforms[ 'mieCoefficient' ].value = 0.005;
-uniforms[ 'mieDirectionalG' ].value = 0.8;
-
-var parameters = {
-    distance: 400,
-    inclination: 0.2,
-    azimuth: 0.205
-};
-
-var cubeCamera = new THREE.CubeCamera( 0.1, 1, 512 );
-cubeCamera.renderTarget.texture.generateMipmaps = true;
-cubeCamera.renderTarget.texture.minFilter = THREE.LinearMipmapLinearFilter;
-scene.background = cubeCamera.renderTarget;
-
 function updateSun() {
 
     var theta = Math.PI * ( parameters.inclination - 0.5 );
@@ -133,6 +137,7 @@ function updateSun() {
     skyLight.position.x = parameters.distance * Math.cos( phi );
     skyLight.position.y = parameters.distance * Math.sin( phi ) * Math.sin( theta );
     skyLight.position.z = parameters.distance * Math.sin( phi ) * Math.cos( theta );
+    skyLight.lookAt({x:0, y:0, z: 0});
 
     sky.material.uniforms[ 'sunPosition' ].value = skyLight.position.copy( skyLight.position );
     water.material.uniforms[ 'sunDirection' ].value.copy( skyLight.position ).normalize();
@@ -162,13 +167,18 @@ gltfloader.load(
         console.log(gltf);
         while(gltf.scene.children.length){
             var c = gltf.scene.children[0];
+            if (!c.geometry){
+                gltf.scene.remove(c);
+                continue;
+            };
             c.castShadow = true;
             c.receiveShadow = true;
+            c.geometry.computeBoundingBox();
             gimbal.add(c);
-            airplane.add(camera);
-            camera.position.set(0, 5, 20);
-            camera.lookAt(airplane.position);
         }
+        airplane.add(camera);
+        camera.position.set(0, 5, 20);
+        camera.lookAt(airplane.position);
         scene.add(airplane);
         // orbitcam.target = airplane.position;
         // orbitcam.update();
@@ -179,7 +189,7 @@ gltfloader.load(
 	},
 	// called when loading has errors
 	function ( e ) {
-		console.log( 'error loading model', e );
+		console.error( 'error loading model', e );
 	}
 );
 
@@ -188,10 +198,13 @@ var z = new THREE.Vector3(0,0,1),
     x = new THREE.Vector3(1,0,0);
 var gimbalTarget = new THREE.Quaternion();
 var tempQuat = new THREE.Quaternion();
-var movementTarget = new THREE.Quaternion();
-var currentQuaternion = new THREE.Quaternion();
-var animate = function () {
+var rotationTarget = new THREE.Quaternion();
+var tempVect = new THREE.Vector3();
+var inertia = new THREE.Vector3();
+var lastFrame = 0;
+var animate = function (now) {
     let delta;
+    let frameTimeDelta = now - lastFrame;
 
     //visual flair
     gimbalTarget.setFromAxisAngle(z, Math.PI / 3 * -controls.joystick.x); //left-right
@@ -201,20 +214,30 @@ var animate = function () {
     gimbal.quaternion.rotateTowards(gimbalTarget, delta / 10);
 
     //rotation (joystick)
-    movementTarget.copy(airplane.quaternion);
-    movementTarget.multiply(tempQuat.setFromAxisAngle(y, Math.PI / 8 * -controls.joystick.x)); //turn left-right
-    movementTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 8 * -controls.joystick.y)); //pitch up-down
+    rotationTarget.copy(airplane.quaternion);
+    rotationTarget.multiply(tempQuat.setFromAxisAngle(y, Math.PI / 16 * -controls.joystick.x)); //turn left-right
+    rotationTarget.multiply(tempQuat.setFromAxisAngle(x, Math.PI / 8 * -controls.joystick.y)); //pitch up-down
     //rotation (roll)
-    movementTarget.multiply(tempQuat.setFromAxisAngle(z, Math.PI / 10 * -controls.roll));
+    rotationTarget.multiply(tempQuat.setFromAxisAngle(z, Math.PI / 10 * -controls.roll));
     //rotation acceleration
-    delta = airplane.quaternion.angleTo(movementTarget);
-    airplane.quaternion.rotateTowards(movementTarget, delta / 10);
+    delta = airplane.quaternion.angleTo(rotationTarget);
+    airplane.quaternion.rotateTowards(rotationTarget, delta / 10);
 
     //movement
-    airplane.translateOnAxis(z, -controls.throttle);
+    // airplane.translateOnAxis(z, -controls.throttle);
+    // if(controls.throttle < 1){
+    //     airplane.position.y -= 0.5 * (1 - controls.throttle);
+    // }
+    //inertia
+    tempVect.set(0,0,0);
+    tempVect.z = -controls.throttle; //forward movement
+    tempVect.applyQuaternion(airplane.quaternion); //make (previous transforms) local to airplane rotation
     if(controls.throttle < 1){
-        airplane.position.y -= 0.5 * (1 - controls.throttle);
+        tempVect.y = -0.5 * (1 - controls.throttle);
     }
+    inertia.add(tempVect.multiplyScalar(0.1)); //how fast inertia goes up
+    inertia.multiplyScalar(0.97); //how fast inertia goes down
+    airplane.position.add(inertia);
 
     var propeller = airplane.getObjectByName("Propeller");
     if(propeller){
