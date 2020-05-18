@@ -193,6 +193,64 @@ gltfloader.load(
 	}
 );
 
+
+// Contrails
+//R
+var contrailAnchorR = new THREE.Group();
+gimbal.add(contrailAnchorR);
+contrailAnchorR.position.set(7, 4, 3);
+var contrailR = new Contrail(contrailAnchorR);
+//L
+var contrailAnchorL = new THREE.Group();
+gimbal.add(contrailAnchorL);
+contrailAnchorL.position.set(-7, 4, 3);
+var contrailL = new Contrail(contrailAnchorL);
+
+
+function Contrail(anchorObj){
+    const MAX_SEGMENTS = 500;
+    var segments = [];
+
+    // geometry
+    var geometry = new THREE.BufferGeometry();
+    
+    // attributes
+    var positions = new Float32Array( MAX_SEGMENTS * 3 ); // 3 vertices per point
+    geometry.setAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
+    
+    // material
+    var material = new THREE.LineBasicMaterial( { color: 0xff0000 } );
+    
+    // line
+    this.line = new THREE.Line( geometry,  material );
+    this.line.frustumCulled = false;
+    scene.add( this.line );
+    
+    var newPos = new THREE.Vector3();
+    this.update = function updateContrails(){
+        var positions = this.line.geometry.attributes.position.array;
+
+        anchorObj.getWorldPosition(newPos);
+
+        //shift all segments down
+        for (var s = MAX_SEGMENTS - 2; s >= 0; s--){
+            let curr = (s * 3);
+            let next = ((s + 1) * 3);
+            positions[next + 0] = positions[curr + 0];
+            positions[next + 1] = positions[curr + 1];
+            positions[next + 2] = positions[curr + 2];
+        }
+        //add new segment
+        positions[0] = newPos.x * 1;
+        positions[1] = newPos.y * 1;
+        positions[2] = newPos.z * 1;
+        // console.log(positions)
+
+        this.line.geometry.attributes.position.needsUpdate = true;
+    }
+}
+
+
 var z = new THREE.Vector3(0,0,1),
     y = new THREE.Vector3(0,1,0),
     x = new THREE.Vector3(1,0,0);
@@ -202,6 +260,7 @@ var rotationTarget = new THREE.Quaternion();
 var tempVect = new THREE.Vector3();
 var inertia = new THREE.Vector3();
 var lastFrame = 0;
+var lastContrail = 0;
 var animate = function (now) {
     let delta;
     let frameTimeDelta = now - lastFrame;
@@ -245,6 +304,8 @@ var animate = function (now) {
     }
     
     // orbitcam.update();
+    contrailR.update();
+    contrailL.update();
 
     renderer.render( scene, camera );
     requestAnimationFrame( animate );
