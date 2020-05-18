@@ -209,20 +209,20 @@ var contrailL = new Contrail(contrailAnchorL);
 
 function Contrail(anchorObj){
     const MAX_SEGMENTS = 500;
-    var segments = [];
+    const SEGMENT_SIZE = 3 * 6;
 
     // geometry
     var geometry = new THREE.BufferGeometry();
     
     // attributes
-    var positions = new Float32Array( MAX_SEGMENTS * 3 ); // 3 vertices per point
+    var positions = new Float32Array( MAX_SEGMENTS * SEGMENT_SIZE ); // 3 vertices per point
     geometry.setAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
     
     // material
-    var material = new THREE.LineBasicMaterial( { color: 0xff0000 } );
+    var material = new THREE.MeshBasicMaterial( { color: 0xff0000 } );
     
     // line
-    this.line = new THREE.Line( geometry,  material );
+    this.line = new THREE.Mesh( geometry,  material );
     this.line.frustumCulled = false;
     scene.add( this.line );
     
@@ -234,16 +234,27 @@ function Contrail(anchorObj){
 
         //shift all segments down
         for (var s = MAX_SEGMENTS - 2; s >= 0; s--){
-            let curr = (s * 3);
-            let next = ((s + 1) * 3);
-            positions[next + 0] = positions[curr + 0];
-            positions[next + 1] = positions[curr + 1];
-            positions[next + 2] = positions[curr + 2];
+            let curr = (s * SEGMENT_SIZE);
+            let next = ((s + 1) * SEGMENT_SIZE);
+            for (var v = 0; v < SEGMENT_SIZE; v++){
+                positions[next + v] = positions[curr + v];
+            }
         }
+        var origin = [newPos.x * 1, newPos.y * 1, newPos.z * 1];
+        var seg = [
+            [origin[0], origin[1], origin[2]],
+            [origin[0], origin[1] + 2, origin[2]],
+            [origin[0], origin[1] + 2, origin[2] + 2],
+            [origin[0], origin[1], origin[2]],
+            [origin[0], origin[1], origin[2] + 2],
+            [origin[0], origin[1] + 2, origin[2] + 2],
+        ]
         //add new segment
-        positions[0] = newPos.x * 1;
-        positions[1] = newPos.y * 1;
-        positions[2] = newPos.z * 1;
+        for (var v = 0; v < seg.length; v++){
+            for (var i = 0; i < seg[v].length; i++){
+                positions[v * 3 + i] = seg[v][i];
+            }
+        }
         // console.log(positions)
 
         this.line.geometry.attributes.position.needsUpdate = true;
