@@ -23,6 +23,7 @@ Ui.ThrottleSlider(e=>{
 
 var scene = new THREE.Scene();
 var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 4000 );
+camera.layers.enable( 1 );
 var gltfloader = new GLTFLoader();
 
 const color_water = 0x1c91ff;
@@ -242,6 +243,7 @@ function Contrail(anchorObj){
     var clothMaterial = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, color: 0xff0000 });
     var clothGeometry = new THREE.ParametricBufferGeometry( clothFunction, cloth.w, cloth.h ); //(func, width, height)
     var object = new THREE.Mesh( clothGeometry, clothMaterial );
+    object.layers.set( 1 );
     anchorObj.add(object);
 
     var anchorRotation = new THREE.Quaternion();
@@ -597,6 +599,9 @@ var animate = function (now) {
     localInertia.copy(inertia);
     localInertia.negate();
     tempQuat.copy(airplane.quaternion);
+    tempQuat.inverse();
+    localInertia.applyQuaternion(tempQuat);
+    tempQuat.copy(gimbal.quaternion);
     tempQuat.inverse();
     localInertia.applyQuaternion(tempQuat);
 
