@@ -4,6 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { Water } from 'three/examples/jsm/objects/Water';
 import { Sky } from 'three/examples/jsm/objects/Sky';
 import Ui from './ui.js';
+import Clouds from './clouds.js';
 
 var controls = {
     joystick: {x: 0, y:0, z:0},
@@ -21,8 +22,10 @@ Ui.ThrottleSlider(e=>{
     controls.throttle = e;
 })
 
+const VIEW_FAR = 10000;
+
 var scene = new THREE.Scene();
-var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 4000 );
+var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, VIEW_FAR );
 camera.layers.enable( 1 );
 var gltfloader = new GLTFLoader();
 
@@ -31,13 +34,13 @@ const color_sky = 0xd9eeff;
 const color_horizon = 0xc9d0d4;
 const color_sun = 0xffffff;
 
-var renderer = new THREE.WebGLRenderer();
+var renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio( window.devicePixelRatio );
 renderer.setSize( window.innerWidth, window.innerHeight );
 document.body.appendChild( renderer.domElement );
 
 scene.background = new THREE.Color(color_sky);
-// scene.fog = new THREE.Fog( color_horizon, 1, 1000 );
+// scene.fog = new THREE.Fog( color_horizon, VIEW_FAR / 2, VIEW_FAR );
 
 // Ambient Light
 var hemiLight = new THREE.HemisphereLight( color_sky, color_water, 1 );
@@ -47,26 +50,27 @@ scene.add( hemiLightHelper );
 
 // Sunlight
 var skyLight = new THREE.DirectionalLight( color_sun, 1 );
+var skyLightBasePos = new THREE.Vector3(0, 0, 0);
 // skyLight.position.set( -1, 1, 1 );
 // skyLight.position.multiplyScalar( 300 );
 var dirLightHelper = new THREE.DirectionalLightHelper( skyLight, 10 );
 scene.add( dirLightHelper );
 
 // Sun Shadows
-var shadowHelper = new THREE.CameraHelper( skyLight.shadow.camera );
-scene.add( shadowHelper );
 scene.add( skyLight );
 renderer.shadowMapEnabled = true;
 skyLight.castShadow = true;
+var d = 50;
 skyLight.shadow.mapSize.width = 2048;
 skyLight.shadow.mapSize.height = 2048;
-var d = 50;
 skyLight.shadow.camera.left = - d;
 skyLight.shadow.camera.right = d;
 skyLight.shadow.camera.top = d;
 skyLight.shadow.camera.bottom = - d;
-skyLight.shadow.camera.far = 3500;
+skyLight.shadow.camera.far = VIEW_FAR / 2;
 skyLight.shadow.bias = - 0.0001;
+// var shadowHelper = new THREE.CameraHelper( skyLight.shadow.camera );
+// scene.add( shadowHelper );
 
 
 // Skybox
@@ -91,22 +95,12 @@ cubeCamera.renderTarget.texture.generateMipmaps = true;
 cubeCamera.renderTarget.texture.minFilter = THREE.LinearMipmapLinearFilter;
 scene.background = cubeCamera.renderTarget;
 
-
-// Ground
-var groundGeo = new THREE.PlaneBufferGeometry( 10000, 10000 );
-var groundMat = new THREE.MeshPhongMaterial( { color: color_water } );
-var ground = new THREE.Mesh( groundGeo, groundMat );
-ground.position.y = - 33;
-ground.rotation.x = - Math.PI / 2;
-// ground.receiveShadow = true;
-scene.add( ground );
-
 var grid = new THREE.GridHelper(10000, 100, 0xffffff);
 grid.position.y = 1;
 scene.add(grid);
 
 // Water
-var waterGeometry = new THREE.PlaneBufferGeometry( 10000, 10000 );
+var waterGeometry = new THREE.CircleBufferGeometry( VIEW_FAR, 32 );
 
 var water = new Water(
     waterGeometry,
@@ -117,7 +111,7 @@ var water = new Water(
             texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
 
         } ),
-        alpha: 0.1,
+        // alpha: 0.1,
         sunDirection: skyLight.position.clone().normalize(),
         sunColor: 0xffffff,
         waterColor: color_water,
@@ -135,18 +129,24 @@ function updateSun() {
     var theta = Math.PI * ( parameters.inclination - 0.5 );
     var phi = 2 * Math.PI * ( parameters.azimuth - 0.5 );
 
-    skyLight.position.x = parameters.distance * Math.cos( phi );
-    skyLight.position.y = parameters.distance * Math.sin( phi ) * Math.sin( theta );
-    skyLight.position.z = parameters.distance * Math.sin( phi ) * Math.cos( theta );
+    skyLightBasePos.x = parameters.distance * Math.cos( phi );
+    skyLightBasePos.y = parameters.distance * Math.sin( phi ) * Math.sin( theta );
+    skyLightBasePos.z = parameters.distance * Math.sin( phi ) * Math.cos( theta );
     skyLight.lookAt({x:0, y:0, z: 0});
 
-    sky.material.uniforms[ 'sunPosition' ].value = skyLight.position.copy( skyLight.position );
-    water.material.uniforms[ 'sunDirection' ].value.copy( skyLight.position ).normalize();
+    sky.material.uniforms[ 'sunPosition' ].value = skyLightBasePos.copy( skyLightBasePos );
+    water.material.uniforms[ 'sunDirection' ].value.copy( skyLightBasePos ).normalize();
 
     cubeCamera.update( renderer, sky );
 
 }
 updateSun();
+
+//Clouds
+
+var cloudVolume = new THREE.Group();
+var clouds = new Clouds(cloudVolume, 500, 500, 500, 100);
+scene.add(cloudVolume);
 
 
 // // Orbit Camera
@@ -159,6 +159,7 @@ var airplane = new THREE.Group();
 var gimbal = new THREE.Group();
 airplane.add(gimbal);
 airplane.position.set(0, 50, 0);
+skyLight.target = airplane;
 
 gltfloader.load(
 	// resource URL
@@ -551,7 +552,6 @@ var tempVect = new THREE.Vector3();
 var localInertia = new THREE.Vector3();
 var inertia = new THREE.Vector3();
 var lastFrame = 0;
-var lastContrail = 0;
 var animate = function (now) {
     let delta;
     let frameTimeDelta = now - lastFrame;
@@ -614,6 +614,11 @@ var animate = function (now) {
     tempVect.copy(localInertia);
     tempVect.applyQuaternion(tempQuat);
     contrailL.update(now, tempVect);
+
+    //sun follow player
+    skyLight.position.addVectors(airplane.position, skyLightBasePos);
+    //water follow player
+    water.position.multiplyVectors(tempVect.set(1,0,1), airplane.position);
 
     // orbitcam.update();
 
