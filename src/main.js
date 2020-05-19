@@ -215,7 +215,7 @@ function Contrail(anchorObj){
     var restDistance = 0.1;
 
     var xSegs = 3;
-    var ySegs = 30;
+    var ySegs = 20;
 
     var clothFunction = plane( restDistance * xSegs, restDistance * ySegs );
 
