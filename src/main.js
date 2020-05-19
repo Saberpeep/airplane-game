@@ -211,8 +211,8 @@ var contrailL = new Contrail(contrailAnchorL);
 function Contrail(anchorObj){
     
     var DAMPING = 0.03;
-    var DRAG = 1 - DAMPING;
-    var MASS = 0.1;
+    var DRAG = 1 - DAMPING * 10;
+    var MASS = 0.8;
     var restDistance = 0.1;
 
     var xSegs = 3;
@@ -234,7 +234,7 @@ function Contrail(anchorObj){
     }
 
     var windForce = new THREE.Vector3( 0, 0, 0 );
-    var windStrength = 1;
+    var windStrength = 10;
 
     var tmpForce = new THREE.Vector3();
 
