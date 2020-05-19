@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { Vector2, ShaderMaterial, DoubleSide  } from 'three';
 var THREEx	= THREEx	|| {}
 
 THREEx.NoiseShaderMaterial	= function(opts){
@@ -7,11 +7,11 @@ THREEx.NoiseShaderMaterial	= function(opts){
 	opts.fragmentShader	= opts.fragmentShader	|| THREEx.NoiseShaderMaterial.fragmentShader
 	opts.uniforms		= opts.uniforms		|| {
 		time	: { type: "f" , value: 1.0 },
-		scale	: { type: "v2", value: new THREE.Vector2( 1, 1 ) },
-		offset	: { type: "v2", value: new THREE.Vector2( 0, 0 ) },
+		scale	: { type: "v2", value: new Vector2( 1, 1 ) },
+		offset	: { type: "v2", value: new Vector2( 0, 0 ) },
 	}
-	opts.side = THREE.DoubleSide;
-	var material	= new THREE.ShaderMaterial(opts)
+	opts.side = DoubleSide;
+	var material	= new ShaderMaterial(opts)
 	return material
 }
 

@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import { Mesh, PlaneBufferGeometry} from 'three';
 import THREEx from './threex.noiseshadermaterial.js';
 
 var Clouds = function(anchorObj, width, height, depth, nPlanes){
@@ -47,14 +47,13 @@ var Clouds = function(anchorObj, width, height, depth, nPlanes){
     //generate slices
     for(var i = 0; i < nPlanes; i++){
         ;(function(){
-            // var geometry	= new THREE.SphereGeometry( 0.5, 32, 32);
-            var geometry	= new THREE.PlaneBufferGeometry(width,height, 1, 1);
+            var geometry	= new PlaneBufferGeometry(width,height, 1, 1);
             var material	= new THREEx.NoiseShaderMaterial({
                 fragmentShader	: fragmentShader,
                 depthWrite	: false,
                 transparent	: true,
             })
-            var mesh = new THREE.Mesh( geometry, material );
+            var mesh = new Mesh( geometry, material );
             // mesh.position.z	= (i-nPlanes/2) / 2
             mesh.position.y = (depth / nPlanes) * i;
             mesh.position.z	= height / 2;
