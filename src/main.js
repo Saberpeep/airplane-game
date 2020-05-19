@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 // import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { Water } from 'three/examples/jsm/objects/Water';
 import { Sky } from 'three/examples/jsm/objects/Sky';
-import Ui from './ui.js'
+import Ui from './ui.js';
 
 var controls = {
     joystick: {x: 0, y:0, z:0},
@@ -198,67 +198,344 @@ gltfloader.load(
 //R
 var contrailAnchorR = new THREE.Group();
 gimbal.add(contrailAnchorR);
-contrailAnchorR.position.set(7, 4, 3);
+contrailAnchorR.position.set(7.4, 3.7, 0.2);
 var contrailR = new Contrail(contrailAnchorR);
 //L
 var contrailAnchorL = new THREE.Group();
 gimbal.add(contrailAnchorL);
-contrailAnchorL.position.set(-7, 4, 3);
+contrailAnchorL.position.set(-7.4, 3.7, 0.2);
 var contrailL = new Contrail(contrailAnchorL);
 
 
 function Contrail(anchorObj){
-    const MAX_SEGMENTS = 500;
-    const SEGMENT_SIZE = 3 * 6;
-
-    // geometry
-    var geometry = new THREE.BufferGeometry();
     
-    // attributes
-    var positions = new Float32Array( MAX_SEGMENTS * SEGMENT_SIZE ); // 3 vertices per point
-    geometry.setAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
-    
-    // material
-    var material = new THREE.MeshBasicMaterial( { color: 0xff0000 } );
-    
-    // line
-    this.line = new THREE.Mesh( geometry,  material );
-    this.line.frustumCulled = false;
-    scene.add( this.line );
-    
-    var newPos = new THREE.Vector3();
-    this.update = function updateContrails(){
-        var positions = this.line.geometry.attributes.position.array;
+    var DAMPING = 0.03;
+    var DRAG = 1 - DAMPING;
+    var MASS = 0.1;
+    var restDistance = 0.1;
 
-        anchorObj.getWorldPosition(newPos);
+    var xSegs = 3;
+    var ySegs = 30;
 
-        //shift all segments down
-        for (var s = MAX_SEGMENTS - 2; s >= 0; s--){
-            let curr = (s * SEGMENT_SIZE);
-            let next = ((s + 1) * SEGMENT_SIZE);
-            for (var v = 0; v < SEGMENT_SIZE; v++){
-                positions[next + v] = positions[curr + v];
-            }
-        }
-        var origin = [newPos.x * 1, newPos.y * 1, newPos.z * 1];
-        var seg = [
-            [origin[0], origin[1], origin[2]],
-            [origin[0], origin[1] + 2, origin[2]],
-            [origin[0], origin[1] + 2, origin[2] + 2],
-            [origin[0], origin[1], origin[2]],
-            [origin[0], origin[1], origin[2] + 2],
-            [origin[0], origin[1] + 2, origin[2] + 2],
-        ]
-        //add new segment
-        for (var v = 0; v < seg.length; v++){
-            for (var i = 0; i < seg[v].length; i++){
-                positions[v * 3 + i] = seg[v][i];
-            }
-        }
-        // console.log(positions)
+    var clothFunction = plane( restDistance * xSegs, restDistance * ySegs );
 
-        this.line.geometry.attributes.position.needsUpdate = true;
+    var cloth = new Cloth( xSegs, ySegs );
+
+    var GRAVITY = 13;
+    var gravity = new THREE.Vector3( 0, - GRAVITY, 0 ).multiplyScalar( MASS );
+
+    var TIMESTEP = 18 / 1000;
+    var TIMESTEP_SQ = TIMESTEP * TIMESTEP;
+
+    var pins = [];
+    for (let i = 0; i <= cloth.w; i++){
+        pins.push(i);
     }
+
+    var windForce = new THREE.Vector3( 0, 0, 0 );
+    var windStrength = 1;
+
+    var tmpForce = new THREE.Vector3();
+
+    var lastTime;
+
+    var clothMaterial = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, color: 0xff0000 });
+    var clothGeometry = new THREE.ParametricBufferGeometry( clothFunction, cloth.w, cloth.h ); //(func, width, height)
+    var object = new THREE.Mesh( clothGeometry, clothMaterial );
+    anchorObj.add(object);
+
+    var anchorRotation = new THREE.Quaternion();
+    anchorObj.getWorldQuaternion(anchorRotation);
+
+    this.update = simulate;
+
+    function plane( width, height ) {
+
+        return function ( u, v, target ) {
+
+            var x = ( u - 0.5 ) * width;
+            var y = 0;
+            var z = ( v + 0.5 ) * height;
+
+            target.set( x, y, z );
+
+        };
+
+    }
+
+    function Particle( x, y, z, mass ) {
+
+        this.position = new THREE.Vector3();
+        this.previous = new THREE.Vector3();
+        this.original = new THREE.Vector3();
+        this.a = new THREE.Vector3( 0, 0, 0 ); // acceleration
+        this.mass = mass;
+        this.invMass = 1 / mass;
+        this.tmp = new THREE.Vector3();
+        this.tmp2 = new THREE.Vector3();
+
+        // init
+
+        clothFunction( x, y, this.position ); // position
+        clothFunction( x, y, this.previous ); // previous
+        clothFunction( x, y, this.original );
+
+    }
+
+    // Force -> Acceleration
+
+    Particle.prototype.addForce = function ( force ) {
+
+        this.a.add(
+            this.tmp2.copy( force ).multiplyScalar( this.invMass )
+        );
+
+    };
+
+
+    // Performs Verlet integration
+    Particle.prototype.integrate = function ( timesq ) {
+
+        var newPos = this.tmp.subVectors( this.position, this.previous );
+        newPos.multiplyScalar( DRAG ).add( this.position );
+        newPos.add( this.a.multiplyScalar( timesq ) );
+
+        this.tmp = this.previous;
+        this.previous = this.position;
+        this.position = newPos;
+
+        this.a.set( 0, 0, 0 );
+
+    };
+
+
+    var diff = new THREE.Vector3();
+
+    function satisfyConstraints( p1, p2, distance ) {
+
+        diff.subVectors( p2.position, p1.position );
+        var currentDist = diff.length();
+        if ( currentDist === 0 ) return; // prevents division by 0
+        var correction = diff.multiplyScalar( 1 - distance / currentDist );
+        var correctionHalf = correction.multiplyScalar( 0.5 );
+        p1.position.add( correctionHalf );
+        p2.position.sub( correctionHalf );
+
+    }
+
+    function Cloth( w, h ) {
+
+        w = w || 10;
+        h = h || 10;
+        this.w = w;
+        this.h = h;
+
+        var particles = [];
+        var constraints = [];
+
+        var u, v;
+
+        // Create particles
+        for ( v = 0; v <= h; v ++ ) {
+            for ( u = 0; u <= w; u ++ ) {
+                particles.push(
+                    new Particle( u / w, v / h, 0, MASS )
+                );
+            }
+        }
+
+        // Structural
+
+        for ( v = 0; v < h; v ++ ) {
+            for ( u = 0; u < w; u ++ ) {
+                constraints.push( [
+                    particles[ index( u, v ) ],
+                    particles[ index( u, v + 1 ) ],
+                    restDistance
+                ] );
+
+                constraints.push( [
+                    particles[ index( u, v ) ],
+                    particles[ index( u + 1, v ) ],
+                    restDistance
+                ] );
+            }
+        }
+
+        for ( u = w, v = 0; v < h; v ++ ) {
+            constraints.push( [
+                particles[ index( u, v ) ],
+                particles[ index( u, v + 1 ) ],
+                restDistance
+            ] );
+
+        }
+
+        for ( v = h, u = 0; u < w; u ++ ) {
+
+            constraints.push( [
+                particles[ index( u, v ) ],
+                particles[ index( u + 1, v ) ],
+                restDistance
+            ] );
+
+        }
+
+        this.particles = particles;
+        this.constraints = constraints;
+
+        function index( u, v ) {
+
+            return u + v * ( w + 1 );
+
+        }
+
+        this.index = index;
+
+    }
+
+    function simulate( time, windV ) {
+
+        if ( ! lastTime ) {
+            lastTime = time;
+            return;
+        }
+
+        var i, j, il, particles, particle, constraints, constraint;
+
+        // Aerodynamics forces
+        if ( windV ) {
+
+            // windForce.set( Math.sin( time / 2000 ), Math.cos( time / 3000 ), Math.sin( time / 1000 ) );
+            // windForce.normalize();
+            // tmpForce.set(1,1,1);
+            // windForce.subVectors(tmpForce, windForce);
+            windForce.set(1,1,1); //debug only
+            windForce.multiply(windV);
+            windForce.multiplyScalar( windStrength );
+            
+
+            var indx;
+            var normal = new THREE.Vector3();
+            var indices = clothGeometry.index;
+            var normals = clothGeometry.attributes.normal;
+
+            particles = cloth.particles;
+
+            for ( i = 0, il = indices.count; i < il; i += 3 ) {
+
+                for ( j = 0; j < 3; j ++ ) {
+
+                    indx = indices.getX( i + j );
+                    normal.fromBufferAttribute( normals, indx );
+                    tmpForce.copy( normal ).normalize().multiplyScalar( normal.dot( windForce ) );
+                    particles[ indx ].addForce( tmpForce );
+
+                }
+
+            }
+
+        }
+
+        for ( particles = cloth.particles, i = 0, il = particles.length; i < il; i ++ ) {
+
+            particle = particles[ i ];
+            particle.addForce( gravity );
+
+            particle.integrate( TIMESTEP_SQ );
+
+        }
+
+        // Start Constraints
+        constraints = cloth.constraints;
+        il = constraints.length;
+        for ( i = 0; i < il; i ++ ) {
+
+            constraint = constraints[ i ];
+            satisfyConstraints( constraint[ 0 ], constraint[ 1 ], constraint[ 2 ] );
+
+        }
+
+        // Floor Constraints
+        for ( particles = cloth.particles, i = 0, il = particles.length; i < il; i ++ ) {
+
+            particle = particles[ i ];
+            var pos = particle.position;
+            if ( pos.y < -250 ) {
+                pos.y = -250;
+            }
+
+        }
+
+        // Pin Constraints
+        for ( i = 0, il = pins.length; i < il; i ++ ) {
+            var xy = pins[ i ];
+            var p = particles[ xy ];
+            p.position.copy( p.original );
+            p.previous.copy( p.original );
+        }
+
+        // Update render
+        var p = cloth.particles;
+        for ( var i = 0, il = p.length; i < il; i ++ ) {
+
+            var v = p[ i ].position;
+            clothGeometry.attributes.position.setXYZ( i, v.x, v.y, v.z );
+        }
+        clothGeometry.attributes.position.needsUpdate = true;
+        clothGeometry.computeVertexNormals();
+    }
+
+
+    // const MAX_SEGMENTS = 500;
+    // const SEGMENT_SIZE = 3 * 3; //vertex is 3 numbers
+
+    // // geometry
+    // var geometry = new THREE.BufferGeometry();
+    
+    // // attributes
+    // var positions = new Float32Array( MAX_SEGMENTS * SEGMENT_SIZE ); // 3 vertices per point
+    // geometry.setAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
+    
+    // // material
+    // var material = new THREE.MeshBasicMaterial( { color: 0xff0000 } );
+    
+    // // mesh
+    // this.mesh = new THREE.Mesh( geometry,  material );
+    // this.mesh.dynamic = true;
+	// this.mesh.matrixAutoUpdate = false;
+    // this.mesh.frustumCulled = false;
+    // scene.add( this.mesh );
+    
+    // var newPos = new THREE.Vector3();
+    // this.update = function updateContrails(){
+    //     var positions = this.mesh.geometry.attributes.position.array;
+
+    //     anchorObj.getWorldPosition(newPos);
+
+    //     // VERTEX
+    //     // shift all segments down
+    //     for (var s = MAX_SEGMENTS - 2; s >= 0; s--){
+    //         let curr = (s * SEGMENT_SIZE);
+    //         let next = ((s + 1) * SEGMENT_SIZE);
+    //         for (var i = 0; i < SEGMENT_SIZE; i++){
+    //             positions[next + i] = positions[curr + i];
+    //         }
+    //     }
+    //     var origin = [newPos.x * 1, newPos.y * 1, newPos.z * 1];
+    //     var seg = [
+    //         [origin[0], origin[1], origin[2]],
+    //         [origin[0], origin[1] + 2, origin[2]],
+    //         [origin[0], origin[1] + 2, origin[2] + 2],
+    //     ]
+    //     // add new segment
+    //     for (var v = 0; v < seg.length; v++){
+    //         for (var i = 0; i < seg[v].length; i++){
+    //             positions[v * 3 + i] = seg[v][i];
+    //         }
+    //     }
+    //     this.mesh.geometry.attributes.position.needsUpdate = true;
+    // }
 }
 
 
@@ -269,6 +546,7 @@ var gimbalTarget = new THREE.Quaternion();
 var tempQuat = new THREE.Quaternion();
 var rotationTarget = new THREE.Quaternion();
 var tempVect = new THREE.Vector3();
+var localInertia = new THREE.Vector3();
 var inertia = new THREE.Vector3();
 var lastFrame = 0;
 var lastContrail = 0;
@@ -313,10 +591,17 @@ var animate = function (now) {
     if(propeller){
         propeller.rotation.y += 0.3 * controls.throttle;
     }
-    
+
+
+    tempVect.copy(inertia);
+    tempVect.negate();
+    tempQuat.copy(airplane.quaternion);
+    tempQuat.inverse();
+    tempVect.applyQuaternion(tempQuat);
+    contrailR.update(now, tempVect);
+    contrailL.update(now, tempVect);
+
     // orbitcam.update();
-    contrailR.update();
-    contrailL.update();
 
     renderer.render( scene, camera );
     requestAnimationFrame( animate );
