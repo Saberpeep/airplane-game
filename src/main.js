@@ -143,10 +143,9 @@ function updateSun() {
 updateSun();
 
 //Clouds
-
-var cloudVolume = new THREE.Group();
-var clouds = new Clouds(cloudVolume, 500, 500, 500, 100);
-scene.add(cloudVolume);
+// var cloudVolume = new THREE.Group();
+// var clouds = new Clouds(cloudVolume, 500, 500, 500, 100);
+// scene.add(cloudVolume);
 
 
 // // Orbit Camera
