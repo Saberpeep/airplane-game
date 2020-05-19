@@ -587,18 +587,27 @@ var animate = function (now) {
     inertia.multiplyScalar(0.97); //how fast inertia goes down
     airplane.position.add(inertia);
 
+    //propeller rotation
     var propeller = airplane.getObjectByName("Propeller");
     if(propeller){
         propeller.rotation.y += 0.3 * controls.throttle;
     }
 
-
-    tempVect.copy(inertia);
-    tempVect.negate();
+    //wind + tassles
+    localInertia.copy(inertia);
+    localInertia.negate();
     tempQuat.copy(airplane.quaternion);
     tempQuat.inverse();
+    localInertia.applyQuaternion(tempQuat);
+
+    tempQuat.setFromAxisAngle(x, Math.PI / 4 * -controls.roll);
+    tempVect.copy(localInertia);
     tempVect.applyQuaternion(tempQuat);
     contrailR.update(now, tempVect);
+
+    tempQuat.setFromAxisAngle(x, Math.PI / 4 * controls.roll);
+    tempVect.copy(localInertia);
+    tempVect.applyQuaternion(tempQuat);
     contrailL.update(now, tempVect);
 
     // orbitcam.update();
