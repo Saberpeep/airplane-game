@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { Water } from 'three/examples/jsm/objects/Water';
 import { Sky } from 'three/examples/jsm/objects/Sky';
 import Ui from './ui.js';
-import Clouds from './clouds.js';
+import Cloud from './clouds/cloud.js';
 
 var controls = {
     joystick: {x: 0, y:0, z:0},
@@ -58,7 +58,7 @@ scene.add( dirLightHelper );
 
 // Sun Shadows
 scene.add( skyLight );
-renderer.shadowMapEnabled = true;
+renderer.shadowMap.enabled = true;
 skyLight.castShadow = true;
 var d = 50;
 skyLight.shadow.mapSize.width = 2048;
@@ -146,6 +146,10 @@ updateSun();
 // var cloudVolume = new THREE.Group();
 // var clouds = new Clouds(cloudVolume, 500, 500, 500, 100);
 // scene.add(cloudVolume);
+
+//Clouds
+var cloud = new Cloud(camera);
+scene.add(cloud);
 
 
 // // Orbit Camera
