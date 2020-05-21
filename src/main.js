@@ -148,7 +148,9 @@ updateSun();
 // scene.add(cloudVolume);
 
 //Clouds
-var cloud = new Cloud(camera);
+var cloud = new Cloud(camera.position);
+cloud.position.y = 50;
+cloud.setLayer(1);
 scene.add(cloud);
 
 
@@ -161,7 +163,7 @@ scene.add(cloud);
 var airplane = new THREE.Group();
 var gimbal = new THREE.Group();
 airplane.add(gimbal);
-airplane.position.set(0, 50, 0);
+airplane.position.set(0, 50, 150);
 skyLight.target = airplane;
 
 gltfloader.load(
@@ -624,6 +626,7 @@ var animate = function (now) {
     water.position.multiplyVectors(tempVect.set(1,0,1), airplane.position);
 
     // orbitcam.update();
+    cloud.update(camera.getWorldPosition());
 
     renderer.render( scene, camera );
     requestAnimationFrame( animate );

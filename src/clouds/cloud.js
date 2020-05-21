@@ -33,15 +33,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import * as THREE from 'three';
 class Cloud extends THREE.Group {
 
-    constructor(camera){
+    constructor(){
         super();
         // this.width, this.height;
-        this.camera = camera;
+        this.cameraPos = new THREE.Vector3();
         this.lightC = [];
         this.lightP = [];
         this.addLight(new THREE.Vector3(-2, 1, -3), new THREE.Vector3(0.6, 0.1, 0.0));
         this.addLight(new THREE.Vector3(2, 2, 1), new THREE.Vector3(1.0, 0.9, 0.8));
         this.init();
+        this.negativeY = new THREE.Vector3(1,-1,1);
     
         // this.time = 0.0;
     }
@@ -71,7 +72,7 @@ class Cloud extends THREE.Group {
         this.lightC.push(col);
     }
 
-    async init() {
+    init() {
         // var voltex = THREE.ImageUtils.loadTexture("bunny_fill_100x.png");
         var voltex = new THREE.TextureLoader().load("bunny_fill_100x.png");
         voltex.minFilter = voltex.magFilter = THREE.LinearFilter;
@@ -81,34 +82,56 @@ class Cloud extends THREE.Group {
 
         var volcol = new THREE.Vector3(1.0, 1.0, 1.0);
 
+        var cameraPos = new THREE.Vector3();
+
         this.offset = new THREE.Vector3();
 
         this.uniforms = {
-            uCamPos: { type: "v3", value: this.camera.position },
+            uCamPos: { type: "v3", value: cameraPos },
             uLightP: { type: "v3v", value: this.lightP },
             uLightC: { type: "v3v", value: this.lightC },
             uColor: { type: "v3", value: volcol },
-            uTex: { type: "t", value: 0, texture: voltex },
+            uTex: { type: "t", value: voltex },
             uTexDim: { type: "v3", value: voltexDim },
             uOffset: { type: "v3", value: this.offset },
             uTMK: { type: "f", value: 16.0 }
         };
 
-        var shader = new THREE.ShaderMaterial({
-            uniforms: this.uniforms,
-            vertexShader: await this.loadTextFile("vol-vs.glsl"),
-            fragmentShader: await this.loadTextFile("vol-fs.glsl"),
-            depthWrite: false
-        });
+        Promise.all([this.loadTextFile("vol-vs.glsl"), this.loadTextFile("vol-fs.glsl")]).then(function(res){
+            var shader = new THREE.ShaderMaterial({
+                uniforms: this.uniforms,
+                vertexShader: res[0],
+                fragmentShader: res[1],
+                depthWrite: false,
+                transparent: true,
+            });
+    
+            this.cube = new THREE.Mesh(
+                new THREE.BoxBufferGeometry( 1, 1, 1 ), // must be unit cube
+                shader //new THREE.MeshLambertMaterial( { color: 0xCCCCCC } )
+            );
+            this.cube.userData.name = "cloud";
+            this.cube.layers.set(this.layer);
+            this.add(this.cube);
+            this.scale.y = -1;
+            this.scale.multiplyScalar(100, 100, 100);
+            
+        }.bind(this));
+        
 
-        this.cube = new THREE.Mesh(
-            new THREE.CubeGeometry( 1, 1, 1 ), // must be unit cube
-            shader //new THREE.MeshLambertMaterial( { color: 0xCCCCCC } )
-        );
-        this.cube.userData.name = "bob";
-        this.add(this.cube);
-        this.scale.multiplyScalar(100, 100, 100);
+    }
 
+    update(cameraPosition) {
+        if(this.cube){
+            this.cube.material.uniforms[ 'uCamPos' ].value.multiplyVectors(cameraPosition, this.negativeY);
+        }
+    }
+    setLayer(num){
+        if(this.cube){
+            this.cube.layers.set(this.layer);
+        }else{
+            this.layer = num;
+        }
     }
 
     loadTextFile(url){
@@ -124,7 +147,7 @@ class Cloud extends THREE.Group {
                 }
             };
             xhttp.open("GET", url, true);
-            xhttp.setRequestHeader('Accept', 'text');
+            xhttp.setRequestHeader('Accept', 'x-shader/*');
             xhttp.send();
         });
     }

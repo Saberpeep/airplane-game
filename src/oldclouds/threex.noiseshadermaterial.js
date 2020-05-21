@@ -11,6 +11,7 @@ THREEx.NoiseShaderMaterial	= function(opts){
 		offset	: { type: "v2", value: new Vector2( 0, 0 ) },
 	}
 	opts.side = DoubleSide;
+	// opts.depthWrite = false;
 	var material	= new ShaderMaterial(opts)
 	return material
 }
