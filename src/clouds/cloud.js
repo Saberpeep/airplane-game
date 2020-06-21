@@ -39,8 +39,8 @@ class Cloud extends THREE.Group {
         this.cameraPos = new THREE.Vector3();
         this.lightC = [];
         this.lightP = [];
-        this.addLight(new THREE.Vector3(-2, 1, -3), new THREE.Vector3(0.6, 0.1, 0.0));
-        this.addLight(new THREE.Vector3(2, 2, 1), new THREE.Vector3(1.0, 0.9, 0.8));
+        this.addLight(new THREE.Vector3(-2, 1, -3), new THREE.Vector3(1.0, 1.0, 1.0));
+        this.addLight(new THREE.Vector3(2, 2, 1), new THREE.Vector3(0.4, 0.7, 1.0));
         this.init();
         this.negativeY = new THREE.Vector3(1,-1,1);
     
