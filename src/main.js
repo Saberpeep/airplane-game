@@ -181,12 +181,18 @@ gltfloader.load(
             c.castShadow = true;
             c.receiveShadow = true;
             c.geometry.computeBoundingBox();
+            if (c.name == "Collision"){
+                airplaneCollision = new THREE.Geometry().fromBufferGeometry(c.geometry);
+                c.visible = false;
+            }
             gimbal.add(c);
         }
         airplane.add(camera);
         camera.position.set(0, 5, 20);
         camera.lookAt(airplane.position);
+        airplane.name = "Airplane";
         scene.add(airplane);
+        console.log(airplane)
         // orbitcam.target = airplane.position;
         // orbitcam.update();
 	},
@@ -546,16 +552,22 @@ function Contrail(anchorObj){
     // }
 }
 
+var collidableMeshList = [water];
+var airplaneCollision = null;
+var arrowHelpers = [];
 
 var z = new THREE.Vector3(0,0,1),
     y = new THREE.Vector3(0,1,0),
-    x = new THREE.Vector3(1,0,0);
+    x = new THREE.Vector3(1,0,0),
+    origin = new THREE.Vector3(0,0,0);
 var gimbalTarget = new THREE.Quaternion();
 var tempQuat = new THREE.Quaternion();
 var rotationTarget = new THREE.Quaternion();
 var tempVect = new THREE.Vector3();
+var tempVect2 = new THREE.Vector3();
 var localInertia = new THREE.Vector3();
 var inertia = new THREE.Vector3();
+var tempRay = new THREE.Raycaster();
 var lastFrame = 0;
 var animate = function (now) {
     let delta;
@@ -594,6 +606,38 @@ var animate = function (now) {
     inertia.multiplyScalar(0.97); //how fast inertia goes down
     airplane.position.add(inertia);
 
+    // collision
+    if(airplaneCollision){
+        var collisionResults = [];
+        for (var vertexIndex = 0; vertexIndex < airplaneCollision.vertices.length; vertexIndex++) {
+            // var vertex = airplaneCollision.vertices[vertexIndex];
+
+            var localVertex = airplaneCollision.vertices[vertexIndex];
+            var globalVertex = gimbal.localToWorld(tempVect.copy(localVertex));//localVertex.clone().applyMatrix4(airplane.matrix);
+            var directionVector = tempVect.copy(globalVertex).sub(airplane.position).normalize();
+            var length = origin.distanceTo(localVertex);
+
+            //set ray
+            tempRay.set(airplane.position, directionVector);
+            tempRay.near = 0;
+            tempRay.far = length;
+            // tempRay.set( originPoint, tempVect2, 0, originPoint.distanceTo(tempVect) );
+            //visual helpers for debugging
+            if (!arrowHelpers[vertexIndex]){
+                arrowHelpers[vertexIndex] = new THREE.ArrowHelper(directionVector, airplane.position, length, 0xff0000);
+                scene.add( arrowHelpers[vertexIndex] );
+            }else{
+                arrowHelpers[vertexIndex].position.copy(airplane.position);
+                arrowHelpers[vertexIndex].setDirection(directionVector);
+            }
+            //collide ray
+            collisionResults = collisionResults.concat(tempRay.intersectObjects(collidableMeshList));
+        } 
+        if ( collisionResults.length > 0)  {
+            console.log("hit", collisionResults.length);
+        }
+    }
+    
     //propeller rotation
     var propeller = airplane.getObjectByName("Propeller");
     if(propeller){
@@ -626,12 +670,24 @@ var animate = function (now) {
     water.position.multiplyVectors(tempVect.set(1,0,1), airplane.position);
 
     // orbitcam.update();
-    cloud.update(camera.getWorldPosition());
+    camera.getWorldPosition(tempVect)
+    cloud.update(tempVect);
 
     renderer.render( scene, camera );
     requestAnimationFrame( animate );
 };
 animate();
+
+// function collision() {
+//     var originPoint = paddle.position.clone();
+//     for (var vertexIndex = 0; vertexIndex < paddle.geometry.vertices.length; vertexIndex++) {   
+//         var ray = new THREE.Raycaster( paddle.position, paddle.geometry.vertices[vertexIndex] );
+//         var collisionResults = ray.intersectObjects( collidableMeshList );
+//         if ( collisionResults.length > 0)  {
+//            hit = true;
+//         }
+//     } 
+// }   
 
 addEventListener('resize', e =>{
     camera.aspect = window.innerWidth / window.innerHeight;
