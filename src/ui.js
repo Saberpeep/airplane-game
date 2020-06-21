@@ -11,6 +11,11 @@ var container;
 var renderTasks = new RenderTasks();
 var keyListener = new KeyListener();
 
+//debug
+keyListener.add('debug', 'p', e=>{
+    if(e['p']) { debugger };
+})
+
 function init(el){
     if (!el) throw new Error('ui requires a canvas or svg');
 
@@ -91,7 +96,7 @@ function ThrottleSlider(handler){
 
     var baseSpeed = 1;
     var target = baseSpeed;
-    var current = 0;
+    var current = 1;
     var percentSmoothing = 10;
 
     keyListener.add(id, [keyup, keydown, keyboost], function(e){
