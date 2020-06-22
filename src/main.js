@@ -182,7 +182,23 @@ gltfloader.load(
             c.receiveShadow = true;
             c.geometry.computeBoundingBox();
             if (c.name == "Collision"){
-                airplaneCollision = new THREE.Geometry().fromBufferGeometry(c.geometry);
+                //convert buffer geo to regular geo
+                let geo = new THREE.Geometry().fromBufferGeometry(c.geometry);
+                geo.mergeVertices();
+                let mat = new THREE.MeshBasicMaterial( { color: 0xffffff } );
+                airplaneCollision = new THREE.Mesh(geo, mat);
+                airplaneCollision.visible = true;
+                console.log(c.position);
+                airplaneCollision.position.copy(c.position);
+                airplaneCollision.scale.copy(c.scale);
+                gimbal.add(airplaneCollision);
+                c.geometry.dispose();
+                c.material.dispose();
+                gltf.scene.remove(c);
+                continue;
+
+            }
+            if(c.name == "Plane"){
                 c.visible = false;
             }
             gimbal.add(c);
@@ -192,7 +208,7 @@ gltfloader.load(
         camera.lookAt(airplane.position);
         airplane.name = "Airplane";
         scene.add(airplane);
-        console.log(airplane)
+        console.log(airplane);
         // orbitcam.target = airplane.position;
         // orbitcam.update();
 	},
@@ -565,6 +581,7 @@ var tempQuat = new THREE.Quaternion();
 var rotationTarget = new THREE.Quaternion();
 var tempVect = new THREE.Vector3();
 var tempVect2 = new THREE.Vector3();
+var tempVect3 = new THREE.Vector3();
 var localInertia = new THREE.Vector3();
 var inertia = new THREE.Vector3();
 var tempRay = new THREE.Raycaster();
@@ -609,26 +626,27 @@ var animate = function (now) {
     // collision
     if(airplaneCollision){
         var collisionResults = [];
-        for (var vertexIndex = 0; vertexIndex < airplaneCollision.vertices.length; vertexIndex++) {
-            // var vertex = airplaneCollision.vertices[vertexIndex];
-
-            var localVertex = airplaneCollision.vertices[vertexIndex];
-            var globalVertex = gimbal.localToWorld(tempVect.copy(localVertex));//localVertex.clone().applyMatrix4(airplane.matrix);
-            var directionVector = tempVect.copy(globalVertex).sub(airplane.position).normalize();
-            var length = origin.distanceTo(localVertex);
+        var center = airplaneCollision.localToWorld(tempVect2.copy(origin));
+        var vertices = airplaneCollision.geometry.vertices;
+        for (var vertexIndex = 0; vertexIndex < vertices.length; vertexIndex++) {
+            
+            var localVertex = vertices[vertexIndex];
+            var globalVertex = airplaneCollision.localToWorld(tempVect.copy(localVertex));
+            var directionVector = tempVect3.copy(globalVertex).sub(center).normalize();
+            var length = airplaneCollision.position.distanceTo(localVertex);
 
             //set ray
-            tempRay.set(airplane.position, directionVector);
+            tempRay.set(center, directionVector);
             tempRay.near = 0;
             tempRay.far = length;
-            // tempRay.set( originPoint, tempVect2, 0, originPoint.distanceTo(tempVect) );
             //visual helpers for debugging
             if (!arrowHelpers[vertexIndex]){
-                arrowHelpers[vertexIndex] = new THREE.ArrowHelper(directionVector, airplane.position, length, 0xff0000);
+                arrowHelpers[vertexIndex] = new THREE.ArrowHelper(directionVector, center, length, 0xff0000);
                 scene.add( arrowHelpers[vertexIndex] );
             }else{
-                arrowHelpers[vertexIndex].position.copy(airplane.position);
+                arrowHelpers[vertexIndex].position.copy(center);
                 arrowHelpers[vertexIndex].setDirection(directionVector);
+                arrowHelpers[vertexIndex].setLength(length);
             }
             //collide ray
             collisionResults = collisionResults.concat(tempRay.intersectObjects(collidableMeshList));
@@ -677,17 +695,6 @@ var animate = function (now) {
     requestAnimationFrame( animate );
 };
 animate();
-
-// function collision() {
-//     var originPoint = paddle.position.clone();
-//     for (var vertexIndex = 0; vertexIndex < paddle.geometry.vertices.length; vertexIndex++) {   
-//         var ray = new THREE.Raycaster( paddle.position, paddle.geometry.vertices[vertexIndex] );
-//         var collisionResults = ray.intersectObjects( collidableMeshList );
-//         if ( collisionResults.length > 0)  {
-//            hit = true;
-//         }
-//     } 
-// }   
 
 addEventListener('resize', e =>{
     camera.aspect = window.innerWidth / window.innerHeight;
