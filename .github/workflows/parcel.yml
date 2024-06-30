@@ -22,6 +22,7 @@ jobs:
 
     - name: Install build requirements
       run: npm install
+      run: npm install --save-dev @parcel/transformer-sass
 
     - name: Run parcel build
       run: parcel build src/index.html --dist-dir _site/ --public-url ${{ steps.pages.outputs.base_url }}
