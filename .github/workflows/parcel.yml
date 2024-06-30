@@ -22,6 +22,8 @@ jobs:
 
     - name: Install build requirements
       run: npm install
+
+    - name: fix parcel stupid
       run: npm install --save-dev @parcel/transformer-sass
 
     - name: Run parcel build
