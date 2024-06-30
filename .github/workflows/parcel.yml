@@ -28,11 +28,11 @@ jobs:
     - name: fix parcel stupid
       run: npm install --save-dev @parcel/transformer-sass
 
-    - name: copy static files
-      run: cp -r static/* _site/
-
     - name: Run parcel build
       run: parcel build src/index.html --dist-dir _site/ --public-url ${{ steps.pages.outputs.base_url }}
+
+    - name: copy static files
+      run: cp -r static/* _site/
         
     - name: Upload site dist 
       uses: actions/upload-pages-artifact@v3
