@@ -187,8 +187,7 @@ gltfloader.load(
                 geo.mergeVertices();
                 let mat = new THREE.MeshBasicMaterial( { color: 0xffffff } );
                 airplaneCollision = new THREE.Mesh(geo, mat);
-                airplaneCollision.visible = true;
-                console.log(c.position);
+                airplaneCollision.visible = false;
                 airplaneCollision.position.copy(c.position);
                 airplaneCollision.scale.copy(c.scale);
                 gimbal.add(airplaneCollision);
@@ -196,11 +195,10 @@ gltfloader.load(
                 c.material.dispose();
                 gltf.scene.remove(c);
                 continue;
-
             }
-            if(c.name == "Plane"){
-                c.visible = false;
-            }
+            // if(c.name == "Plane"){
+            //     c.visible = false;
+            // }
             gimbal.add(c);
         }
         airplane.add(camera);
@@ -649,10 +647,25 @@ var animate = function (now) {
                 arrowHelpers[vertexIndex].setLength(length);
             }
             //collide ray
-            collisionResults = collisionResults.concat(tempRay.intersectObjects(collidableMeshList));
+            let collisions = tempRay.intersectObjects(collidableMeshList);
+            if(collisions.length > 0){
+                let hit = new THREE.Vector3();
+                hit.copy(collisions[0].face.normal);
+                hit.applyQuaternion(airplane.quaternion)
+                // hit.multiply(inertia);
+                console.log(hit);
+                let magnitude = (collisions[0].distance / tempRay.far) * hit.dot(tempRay.ray.direction) * -5;
+                hit.multiplyScalar(magnitude);
+                collisionResults.push(hit);
+            } 
         } 
         if ( collisionResults.length > 0)  {
-            console.log("hit", collisionResults.length);
+            tempVect.set(0,0,0);
+            for(let i = 0; i < collisionResults.length; i++){
+                tempVect.add(collisionResults[i]);
+            }
+            tempVect.divideScalar(collisionResults.length);
+            inertia.add(tempVect);
         }
     }
     
@@ -726,3 +739,8 @@ function rotateAroundWorldAxis(object, axis, radians ) {
   object.matrix = rotationMatrix;
   object.rotation.setFromRotationMatrix( object.matrix );
 }
+
+// from: https://thinkingbox.medium.com/6-simple-js-math-functions-you-can-use-everyday-68f8d5b58514
+function lerp(a, b, alpha) {
+    return a + alpha * (b - a);
+}    
